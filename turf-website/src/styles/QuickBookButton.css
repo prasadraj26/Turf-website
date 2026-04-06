@@ -1,0 +1,52 @@
+.quick-book-btn {
+  position: fixed;
+  bottom: 6rem;
+  right: 1.5rem;
+  z-index: 40;
+  width: 4rem;
+  height: 4rem;
+  background: #006b1b;
+  color: #d1ffc8;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+@media (min-width: 768px) {
+  .quick-book-btn {
+    bottom: 2rem;
+    right: 2rem;
+  }
+}
+
+.quick-book-btn:hover {
+  transform: scale(1.1);
+}
+
+.quick-book-btn:active {
+  transform: scale(0.95);
+}
+
+.quick-book-tooltip {
+  position: absolute;
+  right: 100%;
+  margin-right: 1rem;
+  background: #2c2f2e;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.quick-book-btn:hover .quick-book-tooltip {
+  opacity: 1;
+}
