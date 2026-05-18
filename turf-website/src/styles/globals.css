@@ -1,3 +1,4 @@
+/* globals.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
@@ -5,25 +6,106 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme Variables - Light/Dark/Neon/Sports support */
 :root {
-  --primary: #006b1b;
-  --primary-dim: #005d16;
-  --primary-fixed: #91f78e;
-  --primary-container: #91f78e;
-  --on-primary: #d1ffc8;
-  --on-primary-container: #005e17;
-  --secondary: #5a5c5c;
-  --surface: #f5f7f5;
-  --surface-container: #e6e9e7;
-  --surface-container-low: #eff1ef;
-  --surface-container-high: #e0e3e1;
-  --surface-container-highest: #d9dedb;
-  --on-surface: #2c2f2e;
-  --on-surface-variant: #595c5b;
-  --outline: #747776;
-  --outline-variant: #abaeac;
-  --background: #f5f7f5;
-  --on-background: #2c2f2e;
+  /* Dark Theme (Default) */
+  --theme-primary: #00ff88;
+  --theme-primary-dark: #00cc66;
+  --theme-background: #0a0a0f;
+  --theme-surface: #1a1a2e;
+  --theme-text: #ffffff;
+  --theme-text-secondary: #a0a0b0;
+  --theme-border: rgba(255, 255, 255, 0.1);
+  --theme-card-bg: rgba(30, 30, 45, 0.7);
+  --theme-gradient: linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 100%);
+  --theme-navbar-bg: rgba(10, 10, 15, 0.95);
+  --theme-button-bg: #00ff88;
+  --theme-button-text: #0a0a0a;
+  --theme-accent: #00ccff;
+  --theme-input-bg: rgba(255, 255, 255, 0.05);
+  --theme-hover: rgba(0, 255, 136, 0.1);
+}
+
+/* Theme Classes */
+.theme-dark {
+  --theme-primary: #00ff88;
+  --theme-primary-dark: #00cc66;
+  --theme-background: #0a0a0f;
+  --theme-surface: #1a1a2e;
+  --theme-text: #ffffff;
+  --theme-text-secondary: #a0a0b0;
+  --theme-border: rgba(255, 255, 255, 0.1);
+  --theme-card-bg: rgba(30, 30, 45, 0.7);
+  --theme-gradient: linear-gradient(135deg, #0a0a0f 0%, #0f0f1a 100%);
+  --theme-navbar-bg: rgba(10, 10, 15, 0.95);
+  --theme-button-bg: #00ff88;
+  --theme-button-text: #0a0a0a;
+  --theme-accent: #00ccff;
+  --theme-input-bg: rgba(255, 255, 255, 0.05);
+  --theme-hover: rgba(0, 255, 136, 0.1);
+}
+
+.theme-light {
+  --theme-primary: #006b1b;
+  --theme-primary-dark: #005d16;
+  --theme-background: #f5f7f5;
+  --theme-surface: #ffffff;
+  --theme-text: #2c2f2e;
+  --theme-text-secondary: #595c5b;
+  --theme-border: rgba(0, 0, 0, 0.1);
+  --theme-card-bg: #ffffff;
+  --theme-gradient: linear-gradient(135deg, #f5f7f5 0%, #e8ece8 100%);
+  --theme-navbar-bg: rgba(255, 255, 255, 0.95);
+  --theme-button-bg: #006b1b;
+  --theme-button-text: #ffffff;
+  --theme-accent: #0088cc;
+  --theme-input-bg: rgba(0, 0, 0, 0.03);
+  --theme-hover: rgba(0, 107, 27, 0.05);
+}
+
+.theme-neon {
+  --theme-primary: #ff00ff;
+  --theme-primary-dark: #cc00cc;
+  --theme-background: #0a0a0a;
+  --theme-surface: #1a0a2e;
+  --theme-text: #ffffff;
+  --theme-text-secondary: #b0a0d0;
+  --theme-border: rgba(255, 0, 255, 0.2);
+  --theme-card-bg: rgba(30, 15, 45, 0.8);
+  --theme-gradient: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 100%);
+  --theme-navbar-bg: rgba(10, 10, 10, 0.95);
+  --theme-button-bg: #ff00ff;
+  --theme-button-text: #ffffff;
+  --theme-accent: #00ffff;
+  --theme-input-bg: rgba(255, 0, 255, 0.1);
+  --theme-hover: rgba(255, 0, 255, 0.1);
+}
+
+.theme-sports {
+  --theme-primary: #ff6b00;
+  --theme-primary-dark: #e55a00;
+  --theme-background: #1a1a2e;
+  --theme-surface: #16213e;
+  --theme-text: #ffffff;
+  --theme-text-secondary: #a0b0c0;
+  --theme-border: rgba(255, 107, 0, 0.2);
+  --theme-card-bg: rgba(30, 40, 60, 0.8);
+  --theme-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  --theme-navbar-bg: rgba(20, 20, 40, 0.95);
+  --theme-button-bg: #ff6b00;
+  --theme-button-text: #ffffff;
+  --theme-accent: #ffcc00;
+  --theme-input-bg: rgba(255, 107, 0, 0.1);
+  --theme-hover: rgba(255, 107, 0, 0.15);
+}
+
+/* Apply theme variables to body */
+body {
+  background: var(--theme-background);
+  color: var(--theme-text);
+  transition: background 0.3s ease, color 0.3s ease;
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
 }
 
 * {
@@ -34,13 +116,6 @@
 
 html {
   scroll-behavior: smooth;
-}
-
-body {
-  font-family: 'Inter', sans-serif;
-  background-color: var(--background);
-  color: var(--on-background);
-  min-height: 100vh;
 }
 
 h1, h2, h3, h4, .font-headline {
@@ -62,16 +137,16 @@ h1, h2, h3, h4, .font-headline {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--surface-container);
+  background: var(--theme-surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--primary);
+  background: var(--theme-primary);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--primary-dim);
+  background: var(--theme-primary-dark);
 }
 
 /* Animations */
@@ -122,9 +197,9 @@ h1, h2, h3, h4, .font-headline {
 .loading-skeleton {
   background: linear-gradient(
     90deg,
-    var(--surface-container) 25%,
-    var(--surface-container-high) 50%,
-    var(--surface-container) 75%
+    var(--theme-surface) 25%,
+    var(--theme-card-bg) 50%,
+    var(--theme-surface) 75%
   );
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
@@ -137,4 +212,20 @@ h1, h2, h3, h4, .font-headline {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* Gradient Text Utility */
+.gradient-text {
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Smooth transitions for theme switching */
+* {
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.3s ease;
 }
