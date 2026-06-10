@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import Navbar from '../components/Navbar';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import "./Booking.css";
 
@@ -12,7 +12,7 @@ const pricingData = {
   defaultLightOnTime: "18",
   defaultLightOffTime: "6",
   defaultWeek: "4",
-  defaultBookSlot: "10", // Increased to allow multiple slots as requested
+  defaultBookSlot: "10",
   defaultBookSlotMessage: "You have already selected maximum number of allowed slots.",
   defaultBookbtnText: "Continue to booking",
   pendingMessage: "This slot is blocked by someone but not paid. Please call 9585323234 to check the availability.",
@@ -62,13 +62,7 @@ const pricingData = {
       { category: "normal", start_time: "18:00", end_time: "23:59", price: "690", date: "2025-01-01" },
       { category: "normal", start_time: "00:00", end_time: "05:00", price: "690", date: "2025-01-01" }
     ]
-  },
-  booked: [
-    { date_time: "2026-05-15", start_time: "17:00", end_time: "17:00", category: "pending", price: "580" },
-    { date_time: "2026-05-15", start_time: "18:00", end_time: "18:00", category: "pending", price: "690" },
-    { date_time: "2026-05-16", start_time: "19:00", end_time: "19:00", category: "confirmed", price: "690" },
-    { date_time: "2026-05-16", start_time: "20:00", end_time: "20:00", category: "confirmed", price: "690" }
-  ]
+  }
 };
 
 const getDayName = (year, month, day) => {
@@ -76,12 +70,28 @@ const getDayName = (year, month, day) => {
   return date.toLocaleDateString('en-US', { weekday: 'long' });
 };
 
-const formatTimeDisplay = (time24) => {
-  const [hours, minutes] = time24.split(':');
+const getShortDayName = (year, month, day) => {
+  const date = new Date(year, month, day);
+  return date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+};
+
+const getShortMonthName = (year, month, day) => {
+  const date = new Date(year, month, day);
+  return date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+};
+
+const formatSlotLabel = (time24) => {
+  const [hours] = time24.split(':');
   const hour = parseInt(hours, 10);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const hour12 = hour % 12 || 12;
-  return `${hour12}:${minutes} ${ampm}`;
+  const nextHour = (hour + 1) % 24;
+  const startAmpm = hour >= 12 ? 'PM' : 'AM';
+  const endAmpm = nextHour >= 12 ? 'PM' : 'AM';
+  const startH = hour % 12 || 12;
+  const endH = nextHour % 12 || 12;
+  if (startAmpm === endAmpm) {
+    return `${startH} to ${endH} ${endAmpm}`;
+  }
+  return `${startH} ${startAmpm} to ${endH} ${endAmpm}`;
 };
 
 const timeToMinutes = (timeStr) => {
@@ -92,196 +102,164 @@ const timeToMinutes = (timeStr) => {
 const isTimeInRule = (timeMinutes, ruleStart, ruleEnd) => {
   const startMin = timeToMinutes(ruleStart);
   let endMin = timeToMinutes(ruleEnd);
-  
   if (endMin <= startMin) {
     endMin += 24 * 60;
     const adjustedTime = timeMinutes < startMin ? timeMinutes + 24 * 60 : timeMinutes;
     return adjustedTime >= startMin && adjustedTime <= endMin;
   }
-  
   return timeMinutes >= startMin && timeMinutes <= endMin;
 };
 
 const getPriceForSlot = (dateTimeStr, timeStr) => {
-  const bookedSlot = pricingData.booked.find(
-    b => b.date_time === dateTimeStr && b.start_time === timeStr
-  );
-  if (bookedSlot) {
-    return parseInt(bookedSlot.price, 10);
-  }
-  
   const date = new Date(dateTimeStr);
   const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
   const timeMinutes = timeToMinutes(timeStr);
-  
-  const specialRules = pricingData.pricingRules.Special.filter(
-    rule => rule.date === dateTimeStr
-  );
-  
+
+  const specialRules = pricingData.pricingRules.Special.filter(r => r.date === dateTimeStr);
   for (const rule of specialRules) {
-    if (isTimeInRule(timeMinutes, rule.start_time, rule.end_time)) {
-      return parseInt(rule.price, 10);
-    }
+    if (isTimeInRule(timeMinutes, rule.start_time, rule.end_time)) return parseInt(rule.price, 10);
   }
-  
+
   const dayRules = pricingData.pricingRules[dayName];
   if (dayRules) {
     for (const rule of dayRules) {
-      if (isTimeInRule(timeMinutes, rule.start_time, rule.end_time)) {
-        return parseInt(rule.price, 10);
-      }
+      if (isTimeInRule(timeMinutes, rule.start_time, rule.end_time)) return parseInt(rule.price, 10);
     }
   }
-  
+
   const lightOnMinutes = timeToMinutes(pricingData.defaultLightOnTime);
   const lightOffMinutes = timeToMinutes(pricingData.defaultLightOffTime);
   let isLightTime = false;
-  
   if (lightOffMinutes <= lightOnMinutes) {
     isLightTime = timeMinutes >= lightOnMinutes || timeMinutes < lightOffMinutes;
   } else {
     isLightTime = timeMinutes >= lightOnMinutes && timeMinutes < lightOffMinutes;
   }
-  
-  if (isLightTime) {
-    return parseInt(pricingData.defaultPrice, 10);
-  }
-  return parseInt(pricingData.defaultPriceNoLight, 10);
+  return isLightTime
+    ? parseInt(pricingData.defaultPrice, 10)
+    : parseInt(pricingData.defaultPriceNoLight, 10);
 };
 
 const getSlotStatus = (dateTimeStr, timeStr, selectedSlotsList, firestoreBookings = []) => {
   const slotKey = `${dateTimeStr}|${timeStr}`;
   if (selectedSlotsList.includes(slotKey)) return 'selected';
-  
-  const isBookedInFirestore = firestoreBookings.some(
-    b => b.date === dateTimeStr && b.timeSlots && b.timeSlots.includes(timeStr)
-  );
-  if (isBookedInFirestore) {
-    const fbBooking = firestoreBookings.find(b => b.date === dateTimeStr && b.timeSlots && b.timeSlots.includes(timeStr));
-    return fbBooking.bookingStatus || 'confirmed';
-  }
 
-  const bookedSlot = pricingData.booked.find(
-    b => b.date_time === dateTimeStr && b.start_time === timeStr
+  const isBookedInFirestore = firestoreBookings.some(
+    b => b.date === dateTimeStr && b.timeSlots && b.timeSlots.includes(timeStr) && b.bookingStatus === 'confirmed'
   );
-  if (bookedSlot) {
-    return bookedSlot.category;
-  }
+  if (isBookedInFirestore) return 'confirmed';
+
   return 'available';
 };
 
+const buildDateStrip = (totalDays = 30) => {
+  const dates = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    dates.push({
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      day: d.getDate(),
+    });
+  }
+  return dates;
+};
+
 function Booking() {
-  const [selectedDate, setSelectedDate] = useState(null);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [selectedDate, setSelectedDate] = useState({
+    year: today.getFullYear(),
+    month: today.getMonth(),
+    day: today.getDate(),
+  });
   const [selectedSlotsList, setSelectedSlotsList] = useState([]);
-  const [currentMonthOffset, setCurrentMonthOffset] = useState(0);
-  const [hoveredSlot, setHoveredSlot] = useState(null);
   const [isBooking, setIsBooking] = useState(false);
   const [firestoreBookings, setFirestoreBookings] = useState([]);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userDetails, setUserDetails] = useState({
+    customerName: '',
+    customerPhone: '',
+    teamName: '',
+    email: ''
+  });
+  const dateStripRef = useRef(null);
+
+  const dateStrip = useMemo(() => buildDateStrip(30), []);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'bookings'), (snapshot) => {
       const bookings = [];
-      snapshot.forEach(doc => {
-        bookings.push({ id: doc.id, ...doc.data() });
-      });
+      snapshot.forEach(doc => bookings.push({ id: doc.id, ...doc.data() }));
       setFirestoreBookings(bookings);
     });
     return () => unsubscribe();
   }, []);
 
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth() + currentMonthOffset;
-  const currentDay = today.getDate();
-
-  const daysInMonth = useMemo(() => {
-    return new Date(currentYear, currentMonth + 1, 0).getDate();
-  }, [currentYear, currentMonth]);
-
-  const firstDayIndex = useMemo(() => {
-    const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-    return firstDay === 0 ? 6 : firstDay - 1;
-  }, [currentYear, currentMonth]);
-
-  const calendarDays = useMemo(() => {
-    const days = [];
-    for (let i = 0; i < firstDayIndex; i++) {
-      days.push(null);
+  useEffect(() => {
+    if (dateStripRef.current) {
+      const todayEl = dateStripRef.current.querySelector('.date-strip-item.active');
+      if (todayEl) todayEl.scrollIntoView({ inline: 'center', behavior: 'smooth' });
     }
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-    return days;
-  }, [firstDayIndex, daysInMonth]);
+  }, []);
 
-  const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const getDateString = ({ year, month, day }) =>
+    `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
 
   const generateTimeSlots = () => {
     const slots = [];
     for (let hour = 0; hour < 24; hour++) {
-      const hourStr = hour.toString().padStart(2, '0');
-      slots.push(`${hourStr}:00`);
+      slots.push(`${hour.toString().padStart(2, '0')}:00`);
     }
     return slots;
   };
 
   const allTimeSlots = generateTimeSlots();
 
+  const isSlotTimePast = (timeStr) => {
+    const selDate = new Date(selectedDate.year, selectedDate.month, selectedDate.day);
+    const nowDate = new Date();
+    nowDate.setHours(0, 0, 0, 0);
+    if (selDate > nowDate) return false;
+    if (selDate < nowDate) return true;
+    const slotHour = parseInt(timeStr.split(':')[0], 10);
+    return slotHour <= new Date().getHours();
+  };
+
   const groupedSlots = {
-    "Late Night": allTimeSlots.slice(0, 6),
-    "Early Morning": allTimeSlots.slice(6, 12),
+    "Early Morning": allTimeSlots.slice(0, 6),
+    "Morning": allTimeSlots.slice(6, 12),
     "Afternoon": allTimeSlots.slice(12, 18),
     "Evening": allTimeSlots.slice(18, 24),
   };
 
-  const handleDateSelect = (day) => {
-    if (day && day >= currentDay) {
-      setSelectedDate(day);
-    }
-  };
-
-  const getDateString = (day) => {
-    return `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-  };
-
-  const getDayNameForDate = (day) => {
-    return getDayName(currentYear, currentMonth, day);
+  const getSlotStatusForDisplay = (timeStr) => {
+    const dateTimeStr = getDateString(selectedDate);
+    if (isSlotTimePast(timeStr)) return 'timeup';
+    return getSlotStatus(dateTimeStr, timeStr, selectedSlotsList, firestoreBookings);
   };
 
   const getSlotPriceForDisplay = (timeStr) => {
-    if (!selectedDate) return null;
     const dateTimeStr = getDateString(selectedDate);
     return getPriceForSlot(dateTimeStr, timeStr);
   };
 
-  const getSlotStatusForDisplay = (timeStr) => {
-    if (!selectedDate) return 'available';
-    const dateTimeStr = getDateString(selectedDate);
-    return getSlotStatus(dateTimeStr, timeStr, selectedSlotsList, firestoreBookings);
-  };
-
   const handleSlotSelect = (slot) => {
-    if (!selectedDate) {
-      alert("Please select a date first");
-      return;
-    }
-    
     const dateTimeStr = getDateString(selectedDate);
     const status = getSlotStatusForDisplay(slot);
-    
+
+    if (status === 'timeup') return;
     if (status === 'confirmed') {
       alert("This slot is already confirmed and booked. Please choose another slot.");
       return;
     }
-    
-    if (status === 'pending') {
-      alert(pricingData.pendingMessage);
-      return;
-    }
-    
+
     const slotKey = `${dateTimeStr}|${slot}`;
-    
     if (selectedSlotsList.includes(slotKey)) {
       setSelectedSlotsList(prev => prev.filter(s => s !== slotKey));
     } else {
@@ -293,207 +271,199 @@ function Booking() {
     }
   };
 
-  const getTotalSelectedPrice = () => {
-    return selectedSlotsList.reduce((total, slotKey) => {
+  const getTotalSelectedPrice = () =>
+    selectedSlotsList.reduce((total, slotKey) => {
       const [dateStr, timeStr] = slotKey.split('|');
       return total + getPriceForSlot(dateStr, timeStr);
     }, 0);
-  };
 
-  const handleBooking = async () => {
+  const handleProceedToBooking = () => {
     if (selectedSlotsList.length === 0) {
       alert("Please select at least one time slot");
       return;
     }
+    setShowUserForm(true);
+  };
+
+  const handleUserFormSubmit = async (e) => {
+    e.preventDefault();
     
+    if (!userDetails.customerName || !userDetails.customerPhone) {
+      alert("Please enter your name and phone number");
+      return;
+    }
+
     setIsBooking(true);
-    
-    const price = getTotalSelectedPrice();
-    const formattedSlots = selectedSlotsList.map(s => {
-      const [d, t] = s.split('|');
-      return `${d} at ${formatTimeDisplay(t)}`;
-    }).join('\n');
-    
-    setTimeout(() => {
+
+    try {
+      const timeSlots = selectedSlotsList.map(slotKey => {
+        const [_, timeStr] = slotKey.split('|');
+        return timeStr;
+      });
+
+      const totalPrice = getTotalSelectedPrice();
+      const dateTimeStr = getDateString(selectedDate);
+
+      const bookingData = {
+        customerName: userDetails.customerName,
+        customerPhone: userDetails.customerPhone,
+        teamName: userDetails.teamName || 'Individual',
+        email: userDetails.email || '',
+        date: dateTimeStr,
+        timeSlots: timeSlots,
+        bookingStatus: 'confirmed',
+        bookingType: 'online',
+        price: totalPrice,
+        duration: 60 * timeSlots.length,
+        createdAt: new Date().toISOString(),
+        timestamp: Date.now(),
+        notes: `Booked online on ${new Date().toLocaleString()}`
+      };
+
+      console.log('Saving booking to Firebase:', bookingData);
+      
+      await addDoc(collection(db, 'bookings'), bookingData);
+
       alert(
-        `🎉 Booking Summary 🎉\n\n` +
-        `📅 Slots:\n${formattedSlots}\n\n` +
-        `💰 Total Amount: ₹${price}\n` +
-        `⏱ Total Duration: ${selectedSlotsList.length * 60} Minutes\n\n` +
-        `Proceed to payment?`
+        `🎉 Booking Confirmed! 🎉\n\n` +
+        `Customer: ${userDetails.customerName}\n` +
+        `Phone: ${userDetails.customerPhone}\n` +
+        `Date: ${dateTimeStr}\n` +
+        `Slots: ${timeSlots.join(', ')}\n` +
+        `Total Amount: ₹${totalPrice}\n\n` +
+        `Thank you for booking with us!`
       );
-      setIsBooking(false);
-      // Reset after success
+      
+      // Reset form
       setSelectedSlotsList([]);
-    }, 800);
+      setShowUserForm(false);
+      setUserDetails({
+        customerName: '',
+        customerPhone: '',
+        teamName: '',
+        email: ''
+      });
+    } catch (error) {
+      console.error('Error saving booking:', error);
+      alert('Failed to save booking. Please try again. Error: ' + error.message);
+    } finally {
+      setIsBooking(false);
+    }
   };
 
-  const goToPreviousMonth = () => {
-    setCurrentMonthOffset(prev => prev - 1);
-    setSelectedDate(null);
+  const isDateSelected = (d) =>
+    d.year === selectedDate.year &&
+    d.month === selectedDate.month &&
+    d.day === selectedDate.day;
+
+  const isDateToday = (d) => {
+    return d.year === today.getFullYear() &&
+      d.month === today.getMonth() &&
+      d.day === today.getDate();
   };
 
-  const goToNextMonth = () => {
-    setCurrentMonthOffset(prev => prev + 1);
-    setSelectedDate(null);
-  };
-
-  const isDateSelectable = (day) => {
-    if (!day) return false;
-    if (currentMonthOffset < 0) return false;
-    if (currentMonthOffset === 0 && day < currentDay) return false;
-    return true;
-  };
-
-  const getSlotButtonClass = (status, isHovered) => {
-    if (status === 'selected') return 'slot-btn selected';
-    if (status === 'confirmed') return 'slot-btn confirmed';
-    if (status === 'pending') return 'slot-btn pending';
-    if (isHovered) return 'slot-btn hovered';
-    return 'slot-btn';
+  const renderSlotMeta = (status, price) => {
+    if (status === 'timeup') return <span className="slot-meta timeup-label">Time Up</span>;
+    if (status === 'confirmed') return <span className="slot-meta booked-label">Booked</span>;
+    if (status === 'selected') return <span className="slot-meta selected-label">₹{price} ✓</span>;
+    
+    const defaultP = parseInt(pricingData.defaultPrice, 10);
+    if (price < defaultP) {
+      return (
+        <span className="slot-meta price-label">
+          <s className="old-price">₹{defaultP}</s>
+          <span className="new-price"> ₹{price}</span>
+        </span>
+      );
+    }
+    return <span className="slot-meta price-label"><span className="new-price">₹{price}</span></span>;
   };
 
   return (
     <div className="booking-page-wrapper">
       <Navbar />
-      <div className="booking-bg-gradient"></div>
-      
+
       <main className="booking-page-main">
         <div className="booking-container-inner">
-          {/* Hero Section */}
-          <div className="booking-hero glass">
-            <div className="booking-hero-badge">
-              <span className="hero-badge-icon">⚡</span>
-              <span>RESERVE YOUR SPOT</span>
+
+          <h1 className="booking-main-title">Book Your Slot</h1>
+
+          {/* Date Strip */}
+          <div className="date-strip-wrapper">
+            <button className="strip-nav" onClick={() => {
+              if (dateStripRef.current) dateStripRef.current.scrollBy({ left: -200, behavior: 'smooth' });
+            }}>{'<'}</button>
+
+            <div className="date-strip" ref={dateStripRef}>
+              {dateStrip.map((d, i) => (
+                <button
+                  key={i}
+                  className={`date-strip-item ${isDateSelected(d) ? 'active' : ''} ${isDateToday(d) ? 'today' : ''}`}
+                  onClick={() => {
+                    setSelectedDate(d);
+                    setSelectedSlotsList([]);
+                  }}
+                >
+                  <span className="strip-day-num">{d.day}</span>
+                  <span className="strip-day-name">{getShortDayName(d.year, d.month, d.day)}</span>
+                  <span className="strip-month">{getShortMonthName(d.year, d.month, d.day)}</span>
+                </button>
+              ))}
             </div>
-            <h1 className="booking-hero-title">
-              Book Your <span className="text-gradient">Victory</span> Slot
-            </h1>
-            <p className="booking-hero-subtitle">
-              Premium turf grounds with floodlights. Choose your preferred time and dominate the game.
-            </p>
+
+            <button className="strip-nav" onClick={() => {
+              if (dateStripRef.current) dateStripRef.current.scrollBy({ left: 200, behavior: 'smooth' });
+            }}>{'>'}</button>
           </div>
 
-          {/* Main Booking Interface */}
-          <div className="booking-interface">
-            {/* Left Column - Calendar */}
-            <div className="booking-left glass">
-              <div className="calendar-card">
-                <div className="calendar-header">
-                  <button onClick={goToPreviousMonth} className="month-nav">
-                    {'<'}
-                  </button>
-                  <h3>{monthNames[currentMonth]} <span>{currentYear}</span></h3>
-                  <button onClick={goToNextMonth} className="month-nav">
-                    {'>'}
-                  </button>
-                </div>
-                
-                <div className="calendar-weekdays">
-                  {weekdays.map((day, idx) => (
-                    <span key={idx} className="weekday">{day}</span>
-                  ))}
-                </div>
-                
-                <div className="calendar-days">
-                  {calendarDays.map((day, idx) => {
-                    const isSelectable = day && isDateSelectable(day);
-                    const isSelected = day === selectedDate;
-                    const isToday = day === currentDay && currentMonthOffset === 0;
-                    
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => isSelectable && handleDateSelect(day)}
-                        className={`calendar-day ${!day ? "empty" : ""} 
-                          ${isSelected ? "selected" : ""} 
-                          ${isToday ? "today" : ""}
-                          ${!isSelectable && day ? "disabled" : ""}`}
-                        disabled={!isSelectable}
-                      >
-                        {day}
-                        {isSelected && <span className="selected-dot"></span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+          {/* Slot Groups */}
+          <div className="slots-section">
+            {Object.entries(groupedSlots).map(([sessionName, slots]) => {
+              const slotsWithMeta = slots.map(slot => ({
+                time: slot,
+                status: getSlotStatusForDisplay(slot),
+                price: getSlotPriceForDisplay(slot),
+              }));
 
-            {/* Right Column - Time Slots */}
-            <div className="booking-right glass">
-              {!selectedDate ? (
-                <div className="slots-placeholder">
-                  <h4>Select a Date First</h4>
-                  <p>Choose your preferred date from the calendar to view available time slots</p>
-                </div>
-              ) : (
-                <>
-                  <div className="selected-date-header">
-                    <span className="selected-date-day">{getDayNameForDate(selectedDate)}</span>
-                    <span className="selected-date-full">
-                      {monthNames[currentMonth]} {selectedDate}, {currentYear}
-                    </span>
-                  </div>
-                  
-                  <div className="slots-container">
-                    {Object.entries(groupedSlots).map(([sessionName, slots]) => {
-                      const slotsWithStatus = slots.map(slot => ({
-                        time: slot,
-                        status: getSlotStatusForDisplay(slot),
-                        price: getSlotPriceForDisplay(slot)
-                      }));
-                      
-                      const hasAvailable = slotsWithStatus.some(s => s.status === 'available' || s.status === 'selected');
-                      
-                      if (!hasAvailable) return null;
-                      
-                      return (
-                        <div key={sessionName} className="slot-group">
-                          <div className="slot-group-title">
-                            <span>{sessionName}</span>
-                          </div>
-                          <div className="slots-grid-old">
-                            {slotsWithStatus.map(({ time, status, price }) => (
-                              <div 
-                                key={time} 
-                                className="slot-item"
-                                onMouseEnter={() => setHoveredSlot(time)}
-                                onMouseLeave={() => setHoveredSlot(null)}
-                              >
-                                <button
-                                  onClick={() => handleSlotSelect(time)}
-                                  className={getSlotButtonClass(status, hoveredSlot === time)}
-                                  disabled={status === 'confirmed' || status === 'pending'}
-                                >
-                                  <span className="slot-time">{formatTimeDisplay(time)}</span>
-                                  {status === 'confirmed' && <span className="slot-badge booked">Booked</span>}
-                                  {status === 'pending' && <span className="slot-badge pending">Pending</span>}
-                                  {status === 'selected' && <span className="slot-badge selected">Selected</span>}
-                                  {status === 'available' && <span className="slot-price-tag">₹{price}</span>}
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+              const allUnavailable = slotsWithMeta.every(
+                s => s.status === 'timeup' || s.status === 'confirmed'
+              );
+
+              return (
+                <div key={sessionName} className="slot-group">
+                  <h3 className="slot-group-title">{sessionName}</h3>
+
+                  {allUnavailable ? (
+                    <p className="no-slots-msg">No Slots Available - Time Up/Booked.</p>
+                  ) : (
+                    <div className="slots-grid-new">
+                      {slotsWithMeta.map(({ time, status, price }) => (
+                        <div key={time} className="slot-cell">
+                          {renderSlotMeta(status, price)}
+                          <button
+                            className={`slot-btn-new ${status}`}
+                            onClick={() => handleSlotSelect(time)}
+                            disabled={status === 'timeup' || status === 'confirmed'}
+                          >
+                            {formatSlotLabel(time)}
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {/* Booking Summary Bar - Sticky */}
-          <div className={`booking-summary-bar glass ${selectedSlotsList.length > 0 ? 'active' : ''}`}>
+          {/* Summary Bar */}
+          <div className={`booking-summary-bar ${selectedSlotsList.length > 0 ? 'active' : ''}`}>
             <div className="summary-bar-content">
               <div className="summary-info">
                 <div className="summary-details">
                   {selectedSlotsList.length > 0 ? (
                     <>
-                      <span className="summary-date">
-                        {selectedSlotsList.length} slot(s) selected
-                      </span>
+                      <span className="summary-date">{selectedSlotsList.length} slot(s) selected</span>
                       <span className="summary-time">Total Duration: {selectedSlotsList.length * 60} mins</span>
                     </>
                   ) : (
@@ -506,16 +476,84 @@ function Booking() {
                   <span className="price-label">Total: </span>
                   <span className="price-amount">₹{getTotalSelectedPrice()}</span>
                 </div>
-                <button 
-                  onClick={handleBooking} 
-                  className={`btn btn-primary book-now-btn ${selectedSlotsList.length === 0 ? 'disabled' : ''}`}
+                <button
+                  onClick={handleProceedToBooking}
+                  className={`book-now-btn ${selectedSlotsList.length === 0 ? 'disabled' : ''}`}
                   disabled={selectedSlotsList.length === 0 || isBooking}
                 >
-                  {isBooking ? 'Processing...' : pricingData.defaultBookbtnText}
+                  {pricingData.defaultBookbtnText}
                 </button>
               </div>
             </div>
           </div>
+
+          {/* User Details Modal */}
+          {showUserForm && (
+            <div className="modal-overlay">
+              <div className="user-form-modal">
+                <h2>Complete Your Booking</h2>
+                <form onSubmit={handleUserFormSubmit}>
+                  <div className="form-group">
+                    <label>Full Name *</label>
+                    <input
+                      type="text"
+                      value={userDetails.customerName}
+                      onChange={(e) => setUserDetails({...userDetails, customerName: e.target.value})}
+                      placeholder="Enter your full name"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Phone Number *</label>
+                    <input
+                      type="tel"
+                      value={userDetails.customerPhone}
+                      onChange={(e) => setUserDetails({...userDetails, customerPhone: e.target.value})}
+                      placeholder="Enter your phone number"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Team Name (Optional)</label>
+                    <input
+                      type="text"
+                      value={userDetails.teamName}
+                      onChange={(e) => setUserDetails({...userDetails, teamName: e.target.value})}
+                      placeholder="Enter your team name"
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Email (Optional)</label>
+                    <input
+                      type="email"
+                      value={userDetails.email}
+                      onChange={(e) => setUserDetails({...userDetails, email: e.target.value})}
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                  
+                  <div className="booking-summary-modal">
+                    <h4>Booking Summary</h4>
+                    <p><strong>Date:</strong> {getDateString(selectedDate)}</p>
+                    <p><strong>Slots:</strong> {selectedSlotsList.map(s => s.split('|')[1]).join(', ')}</p>
+                    <p><strong>Total Amount:</strong> ₹{getTotalSelectedPrice()}</p>
+                  </div>
+                  
+                  <div className="modal-buttons">
+                    <button type="button" onClick={() => setShowUserForm(false)} className="cancel-btn">
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={isBooking} className="confirm-booking-btn">
+                      {isBooking ? 'Processing...' : 'Confirm Booking'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

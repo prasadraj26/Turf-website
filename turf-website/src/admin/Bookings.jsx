@@ -14,6 +14,7 @@ const Bookings = () => {
     userName: '',
     sportType: 'cricket',
     date: '',
+    
     timeSlots: '',
     price: ''
   });
@@ -40,26 +41,48 @@ const Bookings = () => {
   const handleOfflineBookingSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+
     try {
-      const timeSlotsArray = formData.timeSlots.split(',').map(s => s.trim());
-      
+
+      const alreadyBooked = allBookings.some(
+        booking =>
+          booking.date === formData.date &&
+          booking.bookingStatus === "confirmed" &&
+          booking.timeSlots?.includes(formData.timeSlots)
+      );
+
+      if (alreadyBooked) {
+        alert("This slot is already booked.");
+        setIsSubmitting(false);
+        return;
+      }
+
       await addDoc(collection(db, 'bookings'), {
         userName: formData.userName,
         sportType: formData.sportType,
         date: formData.date,
-        timeSlots: timeSlotsArray,
+        timeSlots: [formData.timeSlots],
         price: Number(formData.price),
         bookingStatus: 'confirmed',
         type: 'offline',
         createdAt: serverTimestamp()
       });
-      
+
       setShowModal(false);
-      setFormData({ userName: '', sportType: 'cricket', date: '', timeSlots: '', price: '' });
+
+      setFormData({
+        userName: '',
+        sportType: 'cricket',
+        date: '',
+        timeSlots: '',
+        price: ''
+      });
+
       alert("Offline booking added successfully!");
+
     } catch (error) {
-      console.error("Error adding offline booking:", error);
-      alert("Failed to add booking.");
+      console.error(error);
+      alert("Failed to add booking");
     } finally {
       setIsSubmitting(false);
     }
@@ -115,7 +138,7 @@ const Bookings = () => {
                 <tr key={booking.id}>
                   <td className="font-medium">
                     {booking.userName || booking.teamName}
-                    {booking.type === 'offline' && <span style={{fontSize: '0.7rem', marginLeft: '8px', color: '#f59e0b'}}>(Offline)</span>}
+                    {booking.type === 'offline' && <span style={{fontSize: '0.7rem', marginLeft: '8px', color: '#f59e0b'}}>(OFFLINE)</span>}
                   </td>
                   <td className="capitalize">{booking.sportType || 'Turf'}</td>
                   <td>{booking.date}</td>
@@ -123,11 +146,13 @@ const Bookings = () => {
                   <td>₹{booking.price}</td>
                   <td>
                     <span className={`status-badge ${booking.bookingStatus}`}>
-                      {booking.bookingStatus}
+                      {booking.bookingStatus === "confirmed"
+                        ? "Booked"
+                        : "Cancelled"}
                     </span>
                   </td>
                   <td>
-                    {booking.bookingStatus !== 'cancelled' && (
+                    {booking.bookingStatus === 'confirmed' && (
                       <button 
                         className="btn btn-outline btn-sm" 
                         style={{ borderColor: '#ef4444', color: '#ef4444', padding: '4px 8px' }}
@@ -173,8 +198,15 @@ const Bookings = () => {
                 <input type="date" name="date" value={formData.date} onChange={handleInputChange} required className="form-input" />
               </div>
               <div className="form-group">
-                <label>Time Slots (comma separated, e.g. 18:00, 19:00)</label>
-                <input type="text" name="timeSlots" value={formData.timeSlots} onChange={handleInputChange} required className="form-input" placeholder="18:00, 19:00" />
+                <label>Select Slot</label>
+                <select name="timeSlots" value={formData.timeSlots} onChange={handleInputChange} required className="form-input">
+                  <option value="">Choose Slot</option>
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={`${i.toString().padStart(2, "0")}:00`}>
+                      {`${i.toString().padStart(2, "0")}:00`}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Total Price (₹)</label>
