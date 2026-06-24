@@ -29,7 +29,6 @@ function About() {
     { icon: "wash", name: "Washrooms", desc: "Premium changing rooms" },
     { icon: "water_drop", name: "Drinking Water", desc: "Filtered RO system" },
     { icon: "event_seat", name: "Seating Area", desc: "Spectator gallery" },
-    { icon: "fitness_center", name: "Equipment", desc: "Training gear available" }
   ];
 
   return (

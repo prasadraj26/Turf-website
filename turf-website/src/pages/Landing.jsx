@@ -64,11 +64,6 @@ const Landing = () => {
             <p>FIFA standard turf for 5v5 and 7v7 matches.</p>
             <Link to="/book" className="btn btn-outline card-btn">Book Football</Link>
           </div>
-          <div className="service-card glass">
-            <h3>Badminton Court</h3>
-            <p>Indoor synthetic courts with optimal lighting.</p>
-            <Link to="/book" className="btn btn-outline card-btn">Book Badminton</Link>
-          </div>
         </div>
       </section>
 

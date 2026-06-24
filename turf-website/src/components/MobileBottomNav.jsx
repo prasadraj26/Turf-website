@@ -1,14 +1,15 @@
-import { Link, useLocation } from "react-router-dom";
-import "../styles/MobileBottomNav.css";
+import { Link, useLocation } from 'react-router-dom';
+import { Home, ImageIcon, Phone } from 'lucide-react';
+import '../styles/MobileBottomNav.css';
 
 function MobileBottomNav() {
   const location = useLocation();
 
   const navItems = [
-    { path: "/", label: "HOME", icon: "home", hash: null },
-    { path: "/", label: "GALLERY", icon: "grid_view", hash: "gallery" },
-    { path: "/booking", label: "BOOK", icon: "event_available", hash: null },
-    { path: "/", label: "CONTACT", icon: "contact_support", hash: "contact" },
+    { path: '/', label: 'Home', icon: Home, hash: null },
+    { path: '/', label: 'Gallery', icon: ImageIcon, hash: 'gallery' },
+    { path: '/book', label: 'Book', icon: '⚽', hash: null },
+    { path: '/', label: 'Contact', icon: Phone, hash: 'contact' },
   ];
 
   const isActive = (item) => {
@@ -29,18 +30,21 @@ function MobileBottomNav() {
   };
 
   return (
-    <nav className="mobile-bottom-nav">
-      {navItems.map((item, index) => (
-        <Link
-          key={index}
-          to={item.path}
-          onClick={(e) => handleClick(e, item)}
-          className={`mobile-nav-item ${isActive(item) ? "active" : ""}`}
-        >
-          <span className="material-symbols-outlined">{item.icon}</span>
-          <span>{item.label}</span>
-        </Link>
-      ))}
+    <nav className="mobile-bottom-nav" aria-label="Mobile bottom navigation">
+      {navItems.map((item, index) => {
+        const Icon = item.icon;
+        return (
+          <Link
+            key={index}
+            to={item.hash ? { pathname: item.path, hash: `#${item.hash}` } : item.path}
+            onClick={(e) => handleClick(e, item)}
+            className={`mobile-nav-item ${isActive(item) ? 'active' : ''}`}
+          >
+            {typeof Icon === 'string' ? <span className="mobile-nav-icon-text">{Icon}</span> : <Icon size={20} />}
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
     </nav>
   );
 }

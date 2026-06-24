@@ -42,7 +42,6 @@ function Hero() {
           <div className="hero-tags">
             <span className="hero-tag">⚽ Football</span>
             <span className="hero-tag">🏏 Cricket</span>
-            <span className="hero-tag">🏸 Badminton</span>
           </div>
           
           <p className="hero-description">

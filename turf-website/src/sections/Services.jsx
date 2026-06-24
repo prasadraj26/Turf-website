@@ -29,17 +29,7 @@ function Services() {
       popular: false,
       image: "https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=400&h=300&fit=crop"
     },
-    {
-      id: 3,
-      icon: "🏸",
-      title: "BADMINTON COURT",
-      description: "Indoor professional badminton court with proper lighting, mat flooring, and tournament-grade nets.",
-      features: ["Indoor AC", "Tournament Nets", "Shuttle Services"],
-      price: "₹800",
-      period: "/hour",
-      popular: false,
-      image: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=400&h=300&fit=crop"
-    }
+  
   ];
 
   return (
